@@ -1,12 +1,13 @@
 
 
 import os, sys, csv, heapq, shutil
+from multiprocessing import Pool
+
 
 class CsvSortError(Exception):
     pass
 
-
-def csvsort(input_filename, columns, output_filename='', max_size=100, has_header=True, delimiter=',', quoting=csv.QUOTE_MINIMAL, encoding='utf-8'):
+def csvsort(input_filename, columns, output_filename='', max_size=100, has_header=True, delimiter=',', quoting=csv.QUOTE_MINIMAL, encoding='utf-8', num_parallel=4):
     """Sort the CSV file on disk rather than in memory
     The merge sort algorithm is used to break the file into smaller sub files and
 
@@ -18,9 +19,13 @@ def csvsort(input_filename, columns, output_filename='', max_size=100, has_heade
     :param delimiter: character used to separate fields, default ','
     :param quoting: type of quoting used in the output
     :param encoding: file encoding used in input/output files
+    :param num_parallel: how many chunks to sort in memory at once, default: 4
     """
     tmp_dir = '.csvsorter.{}'.format(os.getpid())
     os.makedirs(tmp_dir, exist_ok=True)
+
+    # max per parallel sort
+    max_size /= num_parallel
 
     try:
         with open(input_filename, 'r', encoding=encoding) as input_fp:
@@ -32,9 +37,13 @@ def csvsort(input_filename, columns, output_filename='', max_size=100, has_heade
 
             columns = parse_columns(columns, header)
 
+            # sort files in memory concurrently
             filenames = csvsplit(reader, max_size, encoding, tmp_dir)
-            for filename in filenames:
-                memorysort(filename, columns, encoding)
+            with Pool(num_parallel) as pool:
+                tasks = [(f, columns, encoding) for f in filenames]
+                pool.map(memorysort_helper, tasks)
+
+            # merge sorted files
             sorted_filename = mergesort(filenames, columns, tmp_dir=tmp_dir, encoding=encoding)
 
         # XXX make more efficient by passing quoting, delimiter, and moving result
@@ -107,6 +116,12 @@ def memorysort(filename, columns, encoding):
     with open(filename, 'w', newline='\n', encoding=encoding) as output_fp:
         writer = csv.writer(output_fp)
         writer.writerows(rows)
+
+
+def memorysort_helper(memsort_args):
+    """ A helper function for memorysort() that just unpacks a tuple of of args into the function arguments.
+    """
+    memorysort(*memsort_args)
 
 
 def yield_csv_rows(filename, columns, encoding):
