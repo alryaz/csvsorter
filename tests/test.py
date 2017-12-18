@@ -29,11 +29,11 @@ class TestCSVSorter(unittest.TestCase):
 
   def check_col_sorted(self, col):
     with open(self.tmp_name, 'r') as fin:
-      prev_line = fin.readline().split(',')
-      for line in fin:
-        line = line.split(',')
-        self.assertTrue(prev_line[col] <= line[col])
-        prev_line = line
+      sorted_lines = fin.readlines()
+      gold = sorted(sorted_lines, key=lambda x : x.split(',')[col])
+
+      for x in range(len(sorted_lines)):
+        self.assertEqual(sorted_lines[x], gold[x])
 
 
   def test_memorysort_allcols(self):
