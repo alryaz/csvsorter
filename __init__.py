@@ -3,7 +3,7 @@
 
 from optparse import OptionParser
 
-import csvsorter
+from .csvsorter import csvsort
 
 def main():
     parser = OptionParser()
@@ -21,8 +21,10 @@ def main():
     else:
         # escape backslashes
         args.columns = [int(column) if column.isdigit() else column for column in args.columns]
-        csvsorter.csvsort(input_files[0], columns=args.columns, max_size=args.max_size, has_header=args.has_header, delimiter=args.delimiter, encoding=args.encoding)
+        csvsort(input_files[0], columns=args.columns, max_size=args.max_size, has_header=args.has_header, delimiter=args.delimiter, encoding=args.encoding)
 
 
 if __name__ == '__main__':
     main()
+
+
