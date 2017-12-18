@@ -27,9 +27,11 @@ class TestCSVSorter(unittest.TestCase):
         self.assertTrue(prev_line < line)
         prev_line = line
 
-  def check_col_sorted(self, col):
+  def check_col_sorted(self, col, skip_header=False):
     with open(self.tmp_name, 'r') as fin:
       sorted_lines = fin.readlines()
+      if skip_header:
+        sorted_lines.pop(0)
       gold = sorted(sorted_lines, key=lambda x : x.split(',')[col])
 
       for x in range(len(sorted_lines)):
@@ -55,7 +57,7 @@ class TestCSVSorter(unittest.TestCase):
       for line in fin:
         linecount += 1
     self.assertEqual(self.num_lines, linecount)
-      
+
   def test_csvsort_onecol(self):
     # sort and force merges
     csvsorter.csvsort(self.tmp_name, [3], max_size=1, has_header=False)
@@ -67,6 +69,21 @@ class TestCSVSorter(unittest.TestCase):
       for line in fin:
         linecount += 1
     self.assertEqual(self.num_lines, linecount)
-      
+
+  def test_header(self):
+    # sort and force merges
+    csvsorter.csvsort(self.tmp_name, [3], max_size=1, has_header=True)
+    self.check_col_sorted(3, skip_header=True)
+
+    # make sure all the lines are present (header not missing)
+    with open(self.tmp_name, 'r') as fin:
+      header = fin.readline()
+      self.assertEqual(header, '{},{},{},{}\n'.format(
+          self.num_lines+4, self.num_lines+3, self.num_lines+2,
+          self.num_lines+1))
+      linecount = 1
+      for line in fin:
+        linecount += 1
+    self.assertEqual(self.num_lines, linecount)
 
 
