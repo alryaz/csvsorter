@@ -19,31 +19,34 @@ class TestCSVSorter(unittest.TestCase):
         os.remove(self.tmp_name)
 
 
-    def check_file_sorted(self):
+    def check_file_sorted(self, sort_cols=None, type_funcs=str, skip_header=False):
         with open(self.tmp_name, 'r') as fin:
-            prev_line = fin.readline()
-            for line in fin:
-                self.assertTrue(prev_line < line)
-                prev_line = line
-
-    def check_col_sorted(self, col, skip_header=False):
-        with open(self.tmp_name, 'r') as fin:
-            sorted_lines = fin.readlines()
             if skip_header:
-                sorted_lines.pop(0)
-            gold = sorted(sorted_lines, key=lambda x : x.split(',')[col])
+                fin.readline()
 
-            for x in range(len(sorted_lines)):
-                self.assertEqual(sorted_lines[x], gold[x])
+            prev_line = fin.readline().split(',')
+            if not sort_cols:
+                sort_cols = list(range(len(prev_line)))
+            N = len(sort_cols)
+
+            if not isinstance(type_funcs, list):
+                type_funcs = [type_funcs] * N
+
+            prev_line = [type_funcs[x](prev_line[sort_cols[x]]) for x in range(N)]
+            for line in fin:
+                line = line.split(',')
+                line = [type_funcs[x](line[sort_cols[x]]) for x in range(N)]
+                self.assertTrue(prev_line <= line)
+                prev_line = line
 
 
     def test_memorysort_allcols(self):
-        csvsorter.memorysort(self.tmp_name, [0,1,2,3], 'utf-8')
+        csvsorter.memorysort(self.tmp_name, [0,1,2,3], [str] * 4, 'utf-8')
         self.check_file_sorted()
 
     def test_memorysort_onecol(self):
-        csvsorter.memorysort(self.tmp_name, [3], 'utf-8')
-        self.check_col_sorted(3)
+        csvsorter.memorysort(self.tmp_name, [3], [str], 'utf-8')
+        self.check_file_sorted(sort_cols=[3])
 
     def test_csvsort(self):
         # sort and force merges
@@ -57,10 +60,35 @@ class TestCSVSorter(unittest.TestCase):
                 linecount += 1
         self.assertEqual(self.num_lines, linecount)
 
-    def test_csvsort_onecol(self):
+
+    def test_csvsort_int(self):
         # sort and force merges
-        csvsorter.csvsort(self.tmp_name, [3], max_size=1, has_header=False)
-        self.check_col_sorted(3)
+        csvsorter.csvsort(self.tmp_name, [0,1,2,3], column_types=int, max_size=1, has_header=False)
+        self.check_file_sorted(type_funcs=int)
+
+        # make sure all the lines are here after merging
+        linecount = 0
+        with open(self.tmp_name, 'r') as fin:
+            for line in fin:
+                linecount += 1
+        self.assertEqual(self.num_lines, linecount)
+
+    def test_csvsort_mixtypes(self):
+        # sort and force merges
+        csvsorter.csvsort(self.tmp_name, [0,2], column_types=[str,int], max_size=1, has_header=False)
+        self.check_file_sorted(sort_cols=[0,2], type_funcs=[str,int])
+
+        # make sure all the lines are here after merging
+        linecount = 0
+        with open(self.tmp_name, 'r') as fin:
+            for line in fin:
+                linecount += 1
+        self.assertEqual(self.num_lines, linecount)
+
+    def test_csvsort_twocols(self):
+        # sort and force merges
+        csvsorter.csvsort(self.tmp_name, [1,3], max_size=1, has_header=False)
+        self.check_file_sorted(sort_cols=[1,3])
 
         # make sure all the lines are here after merging
         linecount = 0
@@ -72,7 +100,7 @@ class TestCSVSorter(unittest.TestCase):
     def test_header(self):
         # sort and force merges
         csvsorter.csvsort(self.tmp_name, [3], max_size=1, has_header=True)
-        self.check_col_sorted(3, skip_header=True)
+        self.check_file_sorted(sort_cols=[3], skip_header=True)
 
         # make sure all the lines are present (header not missing)
         with open(self.tmp_name, 'r') as fin:
