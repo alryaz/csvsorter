@@ -40,11 +40,12 @@ def csvsort(input_filename, columns, output_filename='', max_size=100, has_heade
             # sort files in memory concurrently
             filenames = csvsplit(reader, max_size, encoding, tmp_dir)
             with Pool(num_parallel) as pool:
-                tasks = [(f, columns, encoding) for f in filenames]
-                pool.map(memorysort_helper, tasks)
+                tasks = [(memorysort, f, columns, encoding) for f in filenames]
+                pool.map(pool_helper, tasks)
 
             # merge sorted files
-            sorted_filename = mergesort(filenames, columns, tmp_dir=tmp_dir, encoding=encoding)
+            sorted_filename = mergesort(filenames, columns, tmp_dir=tmp_dir, encoding=encoding, num_parallel=num_parallel)
+
 
         # XXX make more efficient by passing quoting, delimiter, and moving result
         # generate the final output file
@@ -131,25 +132,52 @@ def yield_csv_rows(filename, columns, encoding):
         for row in csv.reader(fp):
             yield row
 
+def merge(filenames, output, columns, encoding):
+    """ Merge 'filenames' into 'output'
+    """
+    if len(filenames) == 1:
+        shutil.copy(filenames[0], output)
+        return
 
-def mergesort(sorted_filenames, columns, nway=2, tmp_dir='', encoding='utf-8'):
-    """Merge these 2 sorted csv files into a single output file
+    with open(output, 'w', newline='\n', encoding=encoding) as output_fp:
+        writer = csv.writer(output_fp)
+        rows = (yield_csv_rows(filename, columns, encoding) for filename in filenames)
+        keyfunc = lambda row: [row[column] for column in columns]
+        writer.writerows(heapq.merge(*rows, key=keyfunc))
+
+def pool_helper(args):
+    """ A helper function that accepts a tuple whose first element is a function, and the remaining are its positional arguments.
+    """
+    func = args[0]
+    func(*args[1:])
+
+
+def mergesort(sorted_filenames, columns, nway=2, tmp_dir='', encoding='utf-8', num_parallel=4):
+    """Merge the sorted csv files into a single output file.
     """
     merge_n = 0
     while len(sorted_filenames) > 1:
-        merge_filenames, sorted_filenames = sorted_filenames[:nway], sorted_filenames[nway:]
-
-        output_filename = os.path.join(tmp_dir, 'merge{}.csv'.format(merge_n))
-        with open(output_filename, 'w', newline='\n', encoding=encoding) as output_fp:
-            writer = csv.writer(output_fp)
+        # Build current level of the merge tree
+        tasks = []
+        outputs = []
+        N = len(sorted_filenames)
+        for i in range(0, N, nway):
+            files = sorted_filenames[i:min(N,i+nway)]
+            outputs.append(os.path.join(tmp_dir, 'merge{}.csv'.format(merge_n)))
+            tasks.append([merge, files, outputs[-1], columns, encoding])
             merge_n += 1
-            rows = (yield_csv_rows(filename, columns, encoding) for filename in merge_filenames)
-            keyfunc = lambda row: [row[column] for column in columns]
-            writer.writerows(heapq.merge(*rows, key=keyfunc))
-        sorted_filenames.append(output_filename)
+        assert(tasks[-1][1][-1] == sorted_filenames[-1])
 
-        for filename in merge_filenames:
+        with Pool(num_parallel) as pool:
+            pool.map(pool_helper, tasks)
+
+        # delete the now sorted files
+        for filename in sorted_filenames:
             os.remove(filename)
+
+        # for next iteration
+        sorted_filenames = outputs
+
     return sorted_filenames[0]
 
 
