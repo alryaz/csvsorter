@@ -46,6 +46,7 @@ def csvsort(input_filename, columns, output_filename='', max_size=100, has_heade
             # merge sorted files
             sorted_filename = mergesort(filenames, columns, tmp_dir=tmp_dir, encoding=encoding, num_parallel=num_parallel)
 
+
         # XXX make more efficient by passing quoting, delimiter, and moving result
         # generate the final output file
         with open(output_filename or input_filename, 'w', newline='\n', encoding=encoding) as output_fp:
@@ -116,6 +117,12 @@ def memorysort(filename, columns, encoding):
     with open(filename, 'w', newline='\n', encoding=encoding) as output_fp:
         writer = csv.writer(output_fp)
         writer.writerows(rows)
+
+
+def memorysort_helper(memsort_args):
+    """ A helper function for memorysort() that just unpacks a tuple of of args into the function arguments.
+    """
+    memorysort(*memsort_args)
 
 
 def yield_csv_rows(filename, columns, encoding):
