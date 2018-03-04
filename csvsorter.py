@@ -7,7 +7,9 @@ from multiprocessing import Pool
 class CsvSortError(Exception):
     pass
 
-def csvsort(input_filename, columns, column_types=str, key_funcs=str, output_filename='', max_size=100, has_header=True, delimiter=',', quoting=csv.QUOTE_MINIMAL, encoding='utf-8', num_parallel=4, direction='ascending'):
+def csvsort(input_filename, columns, column_types=str, key_funcs=str, output_filename='', max_size=100,
+            has_header=True, delimiter=',', quoting=csv.QUOTE_MINIMAL, encoding='utf-8', num_parallel=4,
+            direction='ascending', tmp_dir_root=None):
     """Sort the CSV file on disk rather than in memory
     The merge sort algorithm is used to break the file into smaller sub files and
 
@@ -22,8 +24,11 @@ def csvsort(input_filename, columns, column_types=str, key_funcs=str, output_fil
     :param quoting: type of quoting used in the output
     :param encoding: file encoding used in input/output files
     :param num_parallel: how many chunks to sort in memory at once, default: 4
+    :param direction: Set the sorting order: 'ascending' or 'descending'
+    :param tmp_dir_root: Root directory to use for the .csvsorter.PID_NUMBER working directories.
     """
-    tmp_dir = '.csvsorter.{}'.format(os.getpid())
+    tmp_dir_root = tmp_dir_root or os.getcwd()
+    tmp_dir = os.path.join(tmp_dir_root, '.csvsorter.{}'.format(os.getpid()))
     os.makedirs(tmp_dir, exist_ok=True)
 
     # if column_types is not a list, make it one
