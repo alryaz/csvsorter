@@ -1,9 +1,22 @@
-
-
-import os, sys, csv, heapq, shutil
+# Standard Library imports
+import csv
+import heapq
+import logging
 from multiprocessing import Pool
-from natsort import natsort_keygen, ns
+import os
+import shutil
+import sys
+
+# PYPI Package imports
+from natsort import ns, natsort_keygen
 from pprintpp import pformat
+
+
+LOG = logging.getLogger(__name__)
+LOG.setLevel(logging.DEBUG)
+console_handler = logging.StreamHandler(sys.stderr)
+console_handler.setLevel(logging.DEBUG)
+LOG.addHandler(console_handler)
 
 
 class CsvSortError(Exception):
@@ -166,11 +179,9 @@ def yield_csv_rows(filename, columns, col_types, encoding):
 def merge(filenames, output, columns, col_types, key_funcs, encoding, direction, last_merge=False):
     """ Merge 'filenames' into 'output'
     """
-    print('\nmerging {} \nto {}\n'.format(pformat(filenames), output))
+    LOG.debug('\nmerging {} \nto {}\n'.format(pformat(filenames), output))
     if len(filenames) == 1:
-        # TODO: Why do the copy and not a "move" here?
-        print("moving {} to {}".format(filenames[0], output))
-        #shutil.copy(filenames[0], output)
+        LOG.debug("moving {} to {}".format(filenames[0], output))
         shutil.move(filenames[0], output)
         return
 
@@ -181,10 +192,9 @@ def merge(filenames, output, columns, col_types, key_funcs, encoding, direction,
         keyfunc = lambda row: [key_funcs[n](row[columns[n]]) for n in range(N)]
         natsort_key = natsort_keygen(key=keyfunc, alg=ns.IGNORECASE)
         if direction == 'descending':
-            #writer.writerows(heapq.merge(*rows, key=keyfunc, reverse=True))
+            # NOTE: heapq.merge() only as the reverse keyword argument as of Python 3.5
             writer.writerows(heapq.merge(*rows, key=natsort_key, reverse=True))
         elif direction == 'ascending':
-            #writer.writerows(heapq.merge(*rows, key=keyfunc))
             writer.writerows(heapq.merge(*rows, key=natsort_key))
 
 def pool_helper(args):
@@ -199,19 +209,19 @@ def mergesort(sorted_filenames, columns, col_types, key_funcs, nway=2, tmp_dir='
     """
     merge_n = 0
     last_merge = False
-    print("start: {}".format(pformat(sorted_filenames)))
+    LOG.debug("start: {}".format(pformat(sorted_filenames)))
     while len(sorted_filenames) > 1:
         # Build current level of the merge tree
-        print("loop: {}".format(pformat(sorted_filenames)))
+        LOG.debug("loop: {}".format(pformat(sorted_filenames)))
         tasks = []
         outputs = []
         N = len(sorted_filenames)
-        print("N: {}".format(N))
+        LOG.debug("N: {}".format(N))
         for i in range(0, N, nway):
             files = sorted_filenames[i:min(N,i+nway)]
             outputs.append(os.path.join(tmp_dir, 'merge{}.csv'.format(merge_n)))
             if N == 2:
-                print("last merge?")
+                LOG.debug("last merge?")
                 last_merge = True
             tasks.append([merge, files, outputs[-1], columns, col_types, key_funcs, encoding, direction, last_merge])
             merge_n += 1
@@ -225,13 +235,12 @@ def mergesort(sorted_filenames, columns, col_types, key_funcs, nway=2, tmp_dir='
             try:
                 os.remove(filename)
             except FileNotFoundError:
-                print("filename {} already removed?".format(filename))
+                LOG.debug("filename {} already removed?".format(filename))
                 pass
 
         # for next iteration
         sorted_filenames = outputs
 
-    print("end: {}".format(pformat(sorted_filenames[0])))
+    LOG.debug("end: {}".format(pformat(sorted_filenames[0])))
     return sorted_filenames[0]
-
 
