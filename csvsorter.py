@@ -111,7 +111,7 @@ def csvsplit(reader, max_size, encoding, tmp_dir):
             current_size = 0
 
     if not (fout is None or fout.closed):
-      fout.close()
+        fout.close()
     return split_filenames
 
 
